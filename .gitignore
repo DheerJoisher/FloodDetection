@@ -1,0 +1,42 @@
+# Dependencies and Next.js output
+node_modules/
+.next/
+out/
+build/
+dist/
+
+# Environment secrets
+.env*
+!.env.example
+
+# Local source workbook was excluded by the existing backend ignore policy
+/data/raw/godavari_dataset_fyp.xlsx
+
+# Python virtual environments and caches
+.venv/
+/ml/.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Generated ML datasets, models, and outputs
+/ml/data/processed/
+/ml/data/features/
+/ml/models/
+/ml/outputs/
+
+# Logs, OS files, editors, and TypeScript build state
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+*.tsbuildinfo
+next-env.d.ts
