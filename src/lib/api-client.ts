@@ -20,6 +20,14 @@ export interface DashboardStats {
 export interface Station {
   station_id: string;
   station_name: string | null;
+  canonical_station_name?: string | null;
+  state?: string | null;
+  district?: string | null;
+  river?: string | null;
+  tributary?: string | null;
+  sub_basin?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface FloodRecord {
@@ -60,6 +68,26 @@ export interface NextDayPrediction {
   status_reason: string;
 }
 
+export interface PersistedPrediction {
+  prediction_id: number;
+  station_id: string;
+  canonical_station_name: string | null;
+  dataset_station_name: string | null;
+  feature_date: string;
+  target_date: string | null;
+  predicted_class: 'LOW' | 'MODERATE' | 'HIGH' | null;
+  probability_low: number | null;
+  probability_moderate: number | null;
+  probability_high: number | null;
+  confidence: number | null;
+  prediction_status: 'PREDICTED' | 'INSUFFICIENT_HISTORY' | 'INVALID_INPUT' | 'UNSUPPORTED_STATION';
+  model_version: string;
+  generated_at: string;
+  input_latest_observation_date: string | null;
+  data_coverage: string;
+  status_reason: string | null;
+}
+
 export interface FloodPage {
   data: FloodRecord[];
   pagination: {
@@ -68,6 +96,111 @@ export interface FloodPage {
     page: number;
     total_pages: number;
   };
+}
+
+export interface CumulativeRiskResult {
+  feature_date: string;
+  target_date: string | null;
+  station_count: number;
+  predicted_station_count: number;
+  coverage: number;
+  risk_level: 'LOW' | 'MODERATE' | 'HIGH' | 'INSUFFICIENT_EVIDENCE';
+  risk_score: number;
+  uncertainty: {
+    level: 'LOW' | 'MODERATE' | 'HIGH';
+    reasons: string[];
+  };
+  decision_reason: string;
+  supporting_stations: string[];
+  contradicting_stations: string[];
+}
+
+export interface RegionalDistrictImpact {
+  district: string;
+  state: string;
+  impact_level: string;
+  station_count: number;
+  predicted_station_count: number;
+  coverage: number;
+  high_station_count: number;
+  moderate_station_count: number;
+  low_station_count: number;
+  uncertainty: 'LOW' | 'MODERATE' | 'HIGH';
+  supporting_stations: string[];
+  supporting_river_systems: string[];
+}
+
+export interface RegionalStateImpact {
+  state: string;
+  impact_level: string;
+  configured_station_count: number;
+  predicted_station_count: number;
+  coverage: number;
+  high_station_count: number;
+  moderate_station_count: number;
+  low_station_count: number;
+  uncertainty: 'LOW' | 'MODERATE' | 'HIGH';
+  supporting_stations: string[];
+  supporting_river_systems: string[];
+}
+
+export interface RegionalImpactResult {
+  feature_date: string;
+  target_date: string | null;
+  regional_impact_level: string;
+  basin_geographic_coverage: {
+    represented_states: string[];
+    represented_state_count: number;
+    unrepresented_basin_states: string[];
+    geographic_coverage_status: 'PARTIAL';
+  };
+  potentially_affected_states: string[];
+  potentially_affected_districts: string[];
+  supporting_stations: string[];
+  supporting_river_systems: string[];
+  uncertain_regions: string[];
+  state_impact_evidence: RegionalStateImpact[];
+  district_impact_evidence: RegionalDistrictImpact[];
+  data_quality: {
+    missing_stations: string[];
+    missing_district_metadata: string[];
+    missing_state_metadata: string[];
+    coverage: number;
+  };
+}
+
+export interface ActiveProjectAlert {
+  alert_id: number;
+  severity: 'WATCH' | 'ADVISORY' | 'WARNING' | 'CRITICAL';
+  lifecycle_state: string;
+  feature_date: string;
+  target_date: string;
+  confidence: number | null;
+  coverage: number | null;
+  uncertainty: 'LOW' | 'MODERATE' | 'HIGH';
+  affected_states: string[];
+  affected_districts: string[];
+  supporting_systems: string[];
+  supporting_stations: string[];
+  headline: string;
+  message: string;
+  recommended_action: string | null;
+  disclaimer: string;
+  created_at: string;
+}
+
+export interface LatestPredictionRun {
+  run_id: number;
+  feature_date: string;
+  target_date: string;
+  started_at: string;
+  completed_at: string | null;
+  status: 'RUNNING' | 'COMPLETED' | 'PARTIAL' | 'FAILED';
+  model_version: string;
+  configured_station_count: number;
+  successful_prediction_count: number;
+  insufficient_history_count: number;
+  failure_count: number;
 }
 
 const apiBaseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL || '/api').replace(/\/+$/, '');
@@ -141,6 +274,24 @@ export const api = {
       method: 'POST',
       body: input,
     });
+  },
+  persistedPredictions(stationId?: string) {
+    const query = stationId
+      ? `?station_id=${encodeURIComponent(stationId)}`
+      : '';
+    return request<{ data: PersistedPrediction[] }>(`/predictions/latest${query}`);
+  },
+  cumulativeRisk() {
+    return request<CumulativeRiskResult>('/predictions/cumulative-evidence');
+  },
+  regionalImpact() {
+    return request<RegionalImpactResult>('/predictions/regional-impact');
+  },
+  activeAlerts() {
+    return request<{ data: ActiveProjectAlert[] }>('/alerts/active');
+  },
+  latestPredictionRun() {
+    return request<{ data: LatestPredictionRun | null }>('/predictions/runs/latest');
   },
   alerts() {
     return request<{ data: FloodAlert[] }>('/alerts');

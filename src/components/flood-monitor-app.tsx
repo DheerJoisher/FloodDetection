@@ -14,12 +14,25 @@ import {
   api,
   ApiError,
   type AuthUser,
+  type CumulativeRiskResult,
   type DashboardStats,
   type FloodAlert,
   type FloodRecord,
-  type NextDayPrediction,
+  type ActiveProjectAlert,
+  type RegionalImpactResult,
+  type PersistedPrediction,
   type Station,
 } from '@/lib/api-client';
+
+import dynamic from 'next/dynamic';
+
+const GodavariRiskMap = dynamic(
+  () => import('@/components/godavari-risk-map'),
+  {
+    ssr: false,
+    loading: () => <div className="gis-loading">Loading station map…</div>,
+  },
+);
 
 type Screen = 'dashboard' | 'monitoring' | 'alerts';
 type Risk = 'LOW' | 'MODERATE' | 'HIGH';
@@ -213,41 +226,45 @@ function NavButton(props: { active: boolean; onClick: () => void; children: Reac
 
 function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [stations, setStations] = useState<Station[]>([]);
+  const [cumulativeRisk, setCumulativeRisk] = useState<CumulativeRiskResult | null>(null);
+  const [regionalImpact, setRegionalImpact] = useState<RegionalImpactResult | null>(null);
+  const [activeProjectAlerts, setActiveProjectAlerts] = useState<ActiveProjectAlert[]>([]);
+  const [persistedPredictions, setPersistedPredictions] = useState<PersistedPrediction[]>([]);
   const [error, setError] = useState('');
+  const [intelligenceError, setIntelligenceError] = useState('');
   const [pending, setPending] = useState(true);
 
   const load = useCallback(async () => {
     setPending(true);
     setError('');
-    try {
-      setStats(await api.dashboard());
-      setError('');
-    } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : 'Could not load dashboard data.');
-    } finally {
-      setPending(false);
+    setIntelligenceError('');
+    const results = await Promise.allSettled([
+      api.dashboard(),
+      api.stations(),
+      api.cumulativeRisk(),
+      api.regionalImpact(),
+      api.activeAlerts(),
+      api.persistedPredictions(),
+    ]);
+    const [dashboard, stationResult, risk, regional, alerts, predictions] = results;
+    if (dashboard.status === 'fulfilled') setStats(dashboard.value);
+    else setError(dashboard.reason instanceof ApiError ? dashboard.reason.message : 'Could not load dashboard data.');
+    if (stationResult.status === 'fulfilled') setStations(stationResult.value.data);
+    if (risk.status === 'fulfilled') setCumulativeRisk(risk.value);
+    if (regional.status === 'fulfilled') setRegionalImpact(regional.value);
+    if (alerts.status === 'fulfilled') setActiveProjectAlerts(alerts.value.data);
+    if (predictions.status === 'fulfilled') setPersistedPredictions(predictions.value.data);
+    if (results.slice(1).some((result) => result.status === 'rejected')) {
+      setIntelligenceError('Unable to load some current monitoring data. Displayed evidence may be incomplete.');
     }
+    setPending(false);
   }, []);
 
   useEffect(() => {
-    let active = true;
-    api.dashboard()
-      .then((result) => {
-        if (active) {
-          setStats(result);
-          setError('');
-        }
-      })
-      .catch((cause) => {
-        if (active) {
-          setError(cause instanceof ApiError ? cause.message : 'Could not load dashboard data.');
-        }
-      })
-      .finally(() => {
-        if (active) setPending(false);
-      });
-    return () => { active = false; };
-  }, []);
+    const timer = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
 
   return (
     <section>
@@ -286,6 +303,16 @@ function Dashboard() {
           </p>
         </>
       ) : !error ? <EmptyState message="No dashboard data is available." /> : null}
+      {intelligenceError && <ErrorNotice message={intelligenceError} onRetry={() => void load()} />}
+      {pending ? null : (
+        <MonitoringIntelligence
+          stations={stations}
+          persistedPredictions={persistedPredictions}
+          cumulativeRisk={cumulativeRisk}
+          regionalImpact={regionalImpact}
+          activeAlerts={activeProjectAlerts}
+        />
+      )}
     </section>
   );
 }
@@ -316,14 +343,63 @@ function Monitoring() {
   const [morePending, setMorePending] = useState(false);
   const [predictionState, setPredictionState] = useState<{
     key: string;
-    result: NextDayPrediction | null;
+    result: PersistedPrediction | null;
     error: string;
   } | null>(null);
+  const [cumulativeRisk, setCumulativeRisk] = useState<CumulativeRiskResult | null>(null);
+  const [regionalImpact, setRegionalImpact] = useState<RegionalImpactResult | null>(null);
+  const [activeProjectAlerts, setActiveProjectAlerts] = useState<ActiveProjectAlert[]>([]);
+  const [intelligenceError, setIntelligenceError] = useState('');
+  const [intelligencePending, setIntelligencePending] = useState(true);
+  const [persistedPredictions, setPersistedPredictions] = useState<PersistedPrediction[]>([]);
+
+  const loadIntelligence = useCallback(async () => {
+    setIntelligencePending(true);
+    setIntelligenceError('');
+    try {
+      const [risk, regional, alerts, predictions] = await Promise.all([
+        api.cumulativeRisk(),
+        api.regionalImpact(),
+        api.activeAlerts(),
+        api.persistedPredictions(),
+      ]);
+      setCumulativeRisk(risk);
+      setRegionalImpact(regional);
+      setActiveProjectAlerts(alerts.data);
+      setPersistedPredictions(predictions.data);
+      setIntelligencePending(false);
+    } catch (cause) {
+      setIntelligenceError(
+        cause instanceof ApiError ? cause.message : 'Unable to load current monitoring data.',
+      );
+      setIntelligencePending(false);
+    }
+  }, []);
 
   useEffect(() => {
     api.stations()
       .then((result) => setStations(result.data))
       .catch((cause) => setError(cause instanceof ApiError ? cause.message : 'Could not load stations.'));
+    Promise.all([
+      api.cumulativeRisk(),
+      api.regionalImpact(),
+      api.activeAlerts(),
+      api.persistedPredictions(),
+    ])
+      .then(([risk, regional, alerts, predictions]) => {
+        setCumulativeRisk(risk);
+        setRegionalImpact(regional);
+        setActiveProjectAlerts(alerts.data);
+        setPersistedPredictions(predictions.data);
+        setIntelligencePending(false);
+        setIntelligenceError('');
+      })
+      .catch((cause) => {
+        setIntelligenceError(
+          cause instanceof ApiError ? cause.message : 'Unable to load current monitoring data.',
+        );
+        setIntelligencePending(false);
+      });
   }, []);
 
   const loadRecords = useCallback(async (
@@ -392,12 +468,12 @@ function Monitoring() {
     let active = true;
     if (!stationId) return () => { active = false; };
     const key = JSON.stringify([stationId, endDate]);
-    api.predictNextDay({
-      station_id: stationId,
-      ...(endDate ? { feature_date: endDate } : {}),
-    })
+    api.persistedPredictions(stationId)
       .then((result) => {
-        if (active) setPredictionState({ key, result, error: '' });
+        const selected = result.data.find((row) =>
+          endDate ? row.feature_date === endDate : true,
+        ) ?? null;
+        if (active) setPredictionState({ key, result: selected, error: '' });
       })
       .catch((cause) => {
         if (active) {
@@ -429,10 +505,33 @@ function Monitoring() {
           <h2>Flood records</h2>
           <p>Browse readings with station and date filters.</p>
         </div>
-        <button className="quiet-button" onClick={() => void loadRecords(1, false)} disabled={pending}>
-          Refresh
+        <button
+          className="quiet-button"
+          onClick={() => {
+            void loadRecords(1, false);
+            void loadIntelligence();
+          }}
+          disabled={pending || intelligencePending}
+        >
+          Refresh persisted data
         </button>
       </div>
+      {intelligencePending ? (
+        <div className="intelligence-loading">Loading persisted cumulative monitoring data…</div>
+      ) : intelligenceError ? (
+        <div className="error-notice" role="alert">
+          <span>Unable to load current monitoring data.</span>
+          <button onClick={() => void loadIntelligence()}>Try again</button>
+        </div>
+      ) : (
+        <MonitoringIntelligence
+          stations={stations}
+          persistedPredictions={persistedPredictions}
+          cumulativeRisk={cumulativeRisk}
+          regionalImpact={regionalImpact}
+          activeAlerts={activeProjectAlerts}
+        />
+      )}
       <div className="filter-bar">
         <label>
           Station
@@ -542,9 +641,231 @@ function Monitoring() {
   );
 }
 
+function MonitoringIntelligence(props: {
+  stations: Station[];
+  persistedPredictions: PersistedPrediction[];
+  cumulativeRisk: CumulativeRiskResult | null;
+  regionalImpact: RegionalImpactResult | null;
+  activeAlerts: ActiveProjectAlert[];
+}) {
+  const [selectedStation, setSelectedStation] = useState<import('@/components/godavari-risk-map').MapStation | null>(null);
+  const risk = props.cumulativeRisk;
+  const regional = props.regionalImpact;
+  const alert = props.activeAlerts[0] ?? null;
+  const predictionByStation = new Map(
+    props.persistedPredictions.map((prediction) => [prediction.station_id, prediction]),
+  );
+  const mapStations = props.stations
+    .map((station) => {
+      const prediction = predictionByStation.get(station.station_id);
+      return {
+        station_id: station.station_id,
+        station_name: station.station_name,
+        canonical_station_name: station.canonical_station_name,
+        state: station.state ?? null,
+        district: station.district ?? null,
+        river: station.river ?? null,
+        tributary: station.tributary ?? null,
+        sub_basin: station.sub_basin ?? null,
+        latitude: station.latitude ?? null,
+        longitude: station.longitude ?? null,
+        predicted_class: prediction?.predicted_class ?? null,
+        probability_low: prediction?.probability_low ?? null,
+        probability_moderate: prediction?.probability_moderate ?? null,
+        probability_high: prediction?.probability_high ?? null,
+        confidence: prediction?.confidence ?? null,
+        feature_date: prediction?.feature_date ?? null,
+        target_date: prediction?.target_date ?? null,
+        prediction_status: prediction?.prediction_status ?? 'INSUFFICIENT_HISTORY',
+      } as import('@/components/godavari-risk-map').MapStation;
+    });
+
+  return (
+    <section className="intelligence-grid">
+      <div className="intelligence-summary">
+        <div>
+          <p className="eyebrow">CUMULATIVE PROJECT RISK</p>
+          <h3>{risk?.risk_level ?? 'INSUFFICIENT_EVIDENCE'}</h3>
+        </div>
+        <div className="risk-index">
+          <strong>{risk ? risk.risk_score.toFixed(1) : '—'}</strong>
+          <span>/ 100 project risk index</span>
+        </div>
+        <dl>
+          <div><dt>Feature date</dt><dd>{formatDate(risk?.feature_date ?? null)}</dd></div>
+          <div><dt>Target date</dt><dd>{formatDate(risk?.target_date ?? null)}</dd></div>
+          <div><dt>Uncertainty</dt><dd>{risk?.uncertainty.level ?? 'UNKNOWN'}</dd></div>
+          <div>
+            <dt>Station coverage</dt>
+            <dd>{risk ? `${risk.predicted_station_count} / ${risk.station_count}` : '—'}</dd>
+          </div>
+        </dl>
+      </div>
+      <div className="alert-summary">
+        {alert ? (
+          <>
+            <p className="eyebrow">PROJECT EARLY WARNING</p>
+            <h3>{alert.severity}</h3>
+            <p>{alert.headline}</p>
+            <span>Lifecycle: {alert.lifecycle_state}</span>
+            <span>Target: {formatDate(alert.target_date)}</span>
+          </>
+        ) : (
+          <>
+            <p className="eyebrow">PROJECT EARLY WARNING</p>
+            <h3>NO ACTIVE ALERT</h3>
+            <p>No active project early-warning alert.</p>
+          </>
+        )}
+      </div>
+
+      <div className="gis-panel">
+        <GodavariRiskMap
+          stations={mapStations}
+          affectedStates={regional?.potentially_affected_states ?? []}
+          affectedDistricts={regional?.potentially_affected_districts ?? []}
+          alertSeverity={alert?.severity ?? null}
+          alertTitle={alert?.headline ?? null}
+          onSelectStation={setSelectedStation}
+        />
+      </div>
+
+      {selectedStation && (
+        <aside className="selected-station-card" aria-label="Selected station details">
+          <button
+            type="button"
+            aria-label="Close selected station details"
+            onClick={() => setSelectedStation(null)}
+          >
+            ×
+          </button>
+          <p className="eyebrow">SELECTED STATION</p>
+          <h3>{selectedStation.canonical_station_name || selectedStation.station_name}</h3>
+          <p>Station ID: {selectedStation.station_id}</p>
+          <p>{selectedStation.state ?? 'State unavailable'} · {selectedStation.district ?? 'District unavailable'}</p>
+          <p>{selectedStation.tributary ? `Godavari / ${selectedStation.tributary}` : 'River system unavailable'}</p>
+          {selectedStation.prediction_status === 'PREDICTED' ? (
+            <>
+              <RiskBadge level={selectedStation.predicted_class ?? 'UNKNOWN'} />
+              <div className="probability-grid">
+                <span>LOW <strong>{formatProbability(selectedStation.probability_low)}</strong></span>
+                <span>MODERATE <strong>{formatProbability(selectedStation.probability_moderate)}</strong></span>
+                <span>HIGH <strong>{formatProbability(selectedStation.probability_high)}</strong></span>
+              </div>
+              <p>Model confidence: {formatProbability(selectedStation.confidence)}</p>
+            </>
+          ) : (
+            <p>Prediction status: {selectedStation.prediction_status.replace(/_/g, ' ')}</p>
+          )}
+          <p>Feature: {formatDate(selectedStation.feature_date)} · Target: {formatDate(selectedStation.target_date)}</p>
+        </aside>
+      )}
+
+      <section className="station-evidence" aria-label="Station prediction evidence">
+        <div>
+          <h3>Station predictions</h3>
+          <p>Select a station for persisted prediction details.</p>
+        </div>
+        <div className="station-evidence-list">
+          {mapStations.map((station) => (
+            <button
+              type="button"
+              key={station.station_id}
+              className="station-evidence-button"
+              aria-pressed={selectedStation?.station_id === station.station_id}
+              onClick={() => setSelectedStation(station)}
+            >
+              <span>{station.canonical_station_name || station.station_name || station.station_id}</span>
+              <RiskBadge level={station.prediction_status === 'PREDICTED'
+                ? station.predicted_class ?? 'UNKNOWN'
+                : 'INSUFFICIENT / UNKNOWN'} />
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <div className="regional-evidence">
+        <h3>Affected regions</h3>
+        {!regional?.state_impact_evidence.length && (
+          <p>No elevated regional evidence currently detected.</p>
+        )}
+        {regional?.state_impact_evidence.map((state) => (
+          <article key={state.state}>
+            <strong>{state.state}</strong>
+            <RiskBadge level={state.impact_level} />
+            <span>{state.coverage * 100}% station coverage · {state.uncertainty} uncertainty</span>
+            <span>Stations: {state.supporting_stations.join(', ') || 'No elevated supporting stations'}</span>
+            <span>Systems: {state.supporting_river_systems.join(', ') || 'No elevated supporting systems'}</span>
+          </article>
+        ))}
+        {regional?.district_impact_evidence
+          .filter((district) => district.impact_level !== 'NO_ELEVATED_EVIDENCE')
+          .map((district) => (
+            <article key={`${district.state}-${district.district}`}>
+              <strong>{district.district}</strong>
+              <span>{district.state}</span>
+              <RiskBadge level={district.impact_level} />
+              <span>{district.coverage * 100}% coverage · {district.uncertainty} uncertainty</span>
+              <span>Stations: {district.supporting_stations.join(', ') || 'No supporting stations'}</span>
+              <span>Systems: {district.supporting_river_systems.join(', ') || 'No supporting systems'}</span>
+            </article>
+          ))}
+      </div>
+
+      <div className="hydrology-context">
+        <h3>Hydrological context</h3>
+        <p>
+          Stations are grouped using verified river-system metadata. The current verified graph has no directional
+          station relationships, so this dashboard does not infer flow paths or draw river connections.
+        </p>
+      </div>
+
+      {alert && (
+        <div className="active-alert-detail">
+          <h3>Active project early-warning evidence</h3>
+          <p>{alert.message}</p>
+          <dl>
+            <div><dt>Feature date</dt><dd>{formatDate(alert.feature_date)}</dd></div>
+            <div><dt>Target date</dt><dd>{formatDate(alert.target_date)}</dd></div>
+            <div><dt>Coverage</dt><dd>{alert.coverage === null ? '—' : `${(alert.coverage * 100).toFixed(0)}%`}</dd></div>
+            <div><dt>Uncertainty</dt><dd>{alert.uncertainty}</dd></div>
+            <div><dt>Affected states</dt><dd>{alert.affected_states.join(', ') || 'None specified'}</dd></div>
+            <div><dt>Affected districts</dt><dd>{alert.affected_districts.join(', ') || 'None specified'}</dd></div>
+            <div><dt>Supporting stations</dt><dd>{alert.supporting_stations.join(', ') || 'None specified'}</dd></div>
+            <div><dt>River systems</dt><dd>{alert.supporting_systems.join(', ') || 'None specified'}</dd></div>
+            <div><dt>Generated</dt><dd>{formatTimestamp(alert.created_at)}</dd></div>
+          </dl>
+          {alert.recommended_action && <p><strong>Recommended action:</strong> {alert.recommended_action}</p>}
+          <p>{alert.disclaimer}</p>
+        </div>
+      )}
+
+      <div className="coverage-panel">
+        <h3>Geographic coverage</h3>
+        <strong>{regional?.basin_geographic_coverage.geographic_coverage_status ?? 'PARTIAL'}</strong>
+        <p>
+          {regional?.basin_geographic_coverage.represented_state_count ?? 0} represented states
+        </p>
+        <p>
+          No station-level model evidence currently available in:{' '}
+          {regional?.basin_geographic_coverage.unrepresented_basin_states.join(', ') ?? '—'}
+        </p>
+      </div>
+
+      <div className="official-disclaimer">
+        <strong>PROJECT EARLY WARNING</strong>
+        <p>
+          This is an experimental academic/project early-warning system. It is not an official
+          flood warning. Follow official CWC, NDMA/SACHET and state disaster-management advisories.
+        </p>
+      </div>
+    </section>
+  );
+}
+
 function NextDayPredictionPanel(props: {
   stationId: string;
-  prediction: NextDayPrediction | null;
+  prediction: PersistedPrediction | null;
   error: string;
   pending: boolean;
   usesEndDate: boolean;
@@ -560,8 +881,8 @@ function NextDayPredictionPanel(props: {
             Separate from existing rule-based risk; predicts T+1 using history through the feature date.
           </p>
         </div>
-        {result?.prediction_status === 'PREDICTED' && result.predicted_risk && (
-          <RiskBadge level={result.predicted_risk} />
+        {result?.prediction_status === 'PREDICTED' && result.predicted_class && (
+          <RiskBadge level={result.predicted_class} />
         )}
       </div>
       {!props.stationId ? (
@@ -573,9 +894,12 @@ function NextDayPredictionPanel(props: {
       ) : result ? (
         <>
           <div className="prediction-facts">
-            <div><span>Station</span><strong>{result.station_name || result.station_id}</strong></div>
+            <div>
+              <span>Station</span>
+              <strong>{result.canonical_station_name || result.dataset_station_name || result.station_id}</strong>
+            </div>
             <div><span>Feature date</span><strong>{formatDate(result.feature_date)}</strong></div>
-            <div><span>Target date (T+1)</span><strong>{formatDate(result.predicted_target_date)}</strong></div>
+            <div><span>Target date (T+1)</span><strong>{formatDate(result.target_date)}</strong></div>
             <div>
               <span>Status</span>
               <strong>{result.prediction_status.replace(/_/g, ' ')}</strong>
@@ -583,9 +907,9 @@ function NextDayPredictionPanel(props: {
             <div>
               <span>Model confidence (max softmax probability)</span>
               <strong>
-                {result.prediction_confidence === null
+                {result.confidence === null
                   ? '—'
-                  : `${(result.prediction_confidence * 100).toFixed(1)}%`}
+                  : `${(result.confidence * 100).toFixed(1)}%`}
               </strong>
             </div>
           </div>

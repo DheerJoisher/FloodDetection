@@ -152,6 +152,65 @@ h1, h2, h3, p { margin-top: 0; }
 .filter-bar select { min-width: 230px; }
 input:focus, select:focus, textarea:focus { border-color: #55aab1; box-shadow: 0 0 0 3px #087e8b18; }
 .clear-button { min-height: 40px; }
+.intelligence-loading { margin-bottom: 14px; padding: 16px; border: 1px solid var(--line); border-radius: 13px; background: #fff; color: var(--muted); }
+.intelligence-grid { position: relative; display: grid; grid-template-columns: 1.3fr .7fr; gap: 14px; margin-bottom: 16px; }
+.intelligence-summary, .alert-summary, .regional-evidence, .coverage-panel, .official-disclaimer {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: #fff;
+}
+.intelligence-summary { display: grid; grid-template-columns: 1fr auto; gap: 12px; }
+.intelligence-summary h3, .alert-summary h3 { margin: 4px 0 0; font-size: 22px; }
+.risk-index { text-align: right; }
+.risk-index strong { display: block; font-size: 28px; color: #087e8b; }
+.risk-index span { color: var(--muted); font-size: 10px; }
+.intelligence-summary dl { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 4px 0 0; }
+.intelligence-summary dl div { padding: 8px; border-radius: 8px; background: #f4f8f8; }
+.intelligence-summary dt { color: var(--muted); font-size: 10px; }
+.intelligence-summary dd { margin: 3px 0 0; font-size: 12px; font-weight: 750; }
+.alert-summary h3 { color: #087e8b; }
+.alert-summary span { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; }
+.gis-panel { grid-column: 1 / -1; position: relative; min-height: 430px; border: 1px solid var(--line); border-radius: 13px; overflow: hidden; background: #edf3f2; }
+.gis-map-wrap { position: relative; height: 430px; }
+.gis-map { width: 100%; height: 430px; z-index: 1; }
+.gis-loading { height: 430px; display: grid; place-items: center; color: var(--muted); background: #edf3f2; }
+.map-overlay-panel { position: absolute; z-index: 500; left: 12px; right: 12px; bottom: 12px; display: flex; flex-wrap: wrap; gap: 8px; pointer-events: none; }
+.map-overlay-panel > * { pointer-events: auto; }
+.map-legend { display: flex; flex-wrap: wrap; gap: 9px; padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,.96); box-shadow: 0 2px 10px #1e3a4a1c; font-size: 9px; }
+.map-legend span { display: flex; align-items: center; gap: 4px; }
+.map-legend i { width: 9px; height: 9px; border-radius: 50%; }
+.map-alert-note, .map-region-note, .map-coverage-note { margin: 0; padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,.96); box-shadow: 0 2px 10px #1e3a4a1c; color: #405962; font-size: 10px; }
+.map-alert-note strong { display: block; color: #087e8b; }
+.map-popup { display: grid; gap: 4px; min-width: 170px; color: #405962; font-size: 11px; }
+.map-popup > span { color: #687d86; }
+.selected-station-card { grid-column: 1 / -1; width: min(100%, 460px); padding: 15px; border: 1px solid var(--line); border-radius: 13px; background: #fff; box-shadow: 0 10px 30px #1e3a4a24; }
+.selected-station-card > button { float: right; border: 0; background: transparent; color: #687d86; cursor: pointer; }
+.selected-station-card h3 { margin: 4px 0 8px; }
+.selected-station-card p { margin: 7px 0; color: #687d86; font-size: 11px; }
+.probability-grid { display: grid; gap: 5px; margin-top: 8px; color: #687d86; font-size: 11px; }
+.station-evidence, .hydrology-context, .active-alert-detail { padding: 16px; border: 1px solid var(--line); border-radius: 13px; background: #fff; }
+.station-evidence { grid-column: 1 / -1; display: grid; gap: 10px; }
+.station-evidence h3, .hydrology-context h3, .active-alert-detail h3 { margin: 0 0 4px; }
+.station-evidence p, .hydrology-context p, .active-alert-detail p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.station-evidence-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 7px; }
+.station-evidence-button { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; padding: 8px; border: 1px solid #dce5e9; border-radius: 8px; background: #f8fbfb; color: var(--ink); text-align: left; font-size: 11px; }
+.station-evidence-button:hover, .station-evidence-button[aria-pressed="true"] { border-color: #55aab1; background: #eaf5f5; }
+.station-evidence-button > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hydrology-context { display: grid; gap: 5px; }
+.active-alert-detail { grid-column: 1 / -1; }
+.active-alert-detail dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
+.active-alert-detail dl div { padding: 8px; border-radius: 8px; background: #f4f8f8; }
+.active-alert-detail dt { color: var(--muted); font-size: 10px; }
+.active-alert-detail dd { margin: 3px 0 0; font-size: 11px; overflow-wrap: anywhere; }
+.regional-evidence { display: grid; gap: 8px; }
+.regional-evidence h3, .coverage-panel h3 { margin: 0 0 4px; }
+.regional-evidence article { display: grid; grid-template-columns: 1fr auto; gap: 4px; padding: 8px; border-radius: 8px; background: #f4f8f8; font-size: 11px; }
+.regional-evidence article span { color: var(--muted); grid-column: 1 / -1; }
+.coverage-panel p { margin: 5px 0; color: var(--muted); font-size: 11px; }
+.official-disclaimer { grid-column: 1 / -1; border-color: #d7e4e6; background: #f8fbfb; }
+.official-disclaimer strong { color: #087e8b; font-size: 11px; }
+.official-disclaimer p { margin: 5px 0 0; color: #687d86; font-size: 11px; }
 .prediction-card {
   margin-bottom: 15px;
   padding: 17px;
@@ -183,6 +242,7 @@ input:focus, select:focus, textarea:focus { border-color: #55aab1; box-shadow: 0
 .risk-badge.low { background: #e6f4eb; color: #18794e; }
 .risk-badge.moderate { background: #fff5df; color: #8a5d00; }
 .risk-badge.high { background: #ffefed; color: #b42318; }
+.risk-badge.watch, .risk-badge.advisory, .risk-badge.warning, .risk-badge.critical, .risk-badge.unknown, .risk-badge.insufficient, .risk-badge.no { background: #edf2f4; color: #526a73; }
 .alert-list { display: grid; gap: 11px; }
 .alert-card { padding: 18px 20px; border: 1px solid var(--line); border-radius: 13px; background: #fff; }
 .alert-card-heading { display: flex; align-items: center; gap: 10px; }
@@ -237,6 +297,11 @@ input:focus, select:focus, textarea:focus { border-color: #55aab1; box-shadow: 0
   .filter-bar select { width: 100%; min-width: 0; }
   .clear-button { align-self: end; }
   .form-row { grid-template-columns: 1fr; }
+  .intelligence-grid { grid-template-columns: 1fr; }
+  .intelligence-summary { grid-template-columns: 1fr; }
+  .risk-index { text-align: left; }
+  .intelligence-summary dl, .active-alert-detail dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gis-panel, .station-evidence, .selected-station-card, .official-disclaimer, .active-alert-detail { grid-column: auto; }
 }
 @media (max-width: 430px) {
   .account > span { display: none; }
